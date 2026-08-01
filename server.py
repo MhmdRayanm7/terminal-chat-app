@@ -1,47 +1,86 @@
-import socket
-import threading
+import socket  
+import threading  
+
+
+clients = []  # list to keep track of connected client sockets
+clients_lock = threading.Lock()  # lock to protect access to clients list
+
+
+def broadcast(message):
+    # copy the list while holding the lock to avoid race conditions
+    with clients_lock:
+        connected_clients = clients.copy()
+
+    # send the message to each client
+    for connected_client in connected_clients:
+        try:
+            connected_client.sendall(message.encode("utf-8"))
+        except OSError:
+            # if sending fails, remove the client
+            remove_client(connected_client)
+
+
+def remove_client(client_socket):
+    # remove the client from the list safely
+    with clients_lock:
+        if client_socket in clients:
+            clients.remove(client_socket)
+
+    # close the socket to release resources
+    client_socket.close()
+
 
 def handle_client(client_socket, client_address):
     print(f"Connected: {client_address}")
-    
-    while True:
+
+    # add client to the shared list
+    with clients_lock:
+        clients.append(client_socket)
+
+    try:
+        while True:
         #          wait until get data    |  bytes → string
-        message = client_socket.recv(1024).decode("utf-8")
+            message = client_socket.recv(1024).decode("utf-8")
 
-        if not message:
-            print("Client disconnected")
-            break
+            if not message:
+                break
 
-        print(f"Received: {message}")
-        
-        server_message = f"Server received: {message}"
-        client_socket.sendall(server_message.encode("utf-8"))
-        
-    client_socket.close()
-  
+            print(f"Received from {client_address}: {message}")
+            broadcast(message)
 
-    
+    except OSError:
+        # ignore socket errors during receive
+        pass
+
+    finally:
+        print(f"Disconnected: {client_address}")
+        remove_client(client_socket)
+
+
 def main():
-    #AF_INET means IPv4
-    #SOCK_STREAM means TCP
+    host = "127.0.0.1"  # localhost
+    port = 5050  # port to listen on
+
+    # create a TCP socket
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    HOST = "127.0.0.1"
-    PORT = 5050
+    # Allow Fast Restart
+    server.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_REUSEADDR,
+        1
+    )
 
-    #Reserve the address and port for the server.
-    server.bind((HOST, PORT))
+    server.bind((host, port))
     server.listen()
-    
-    # Set a short accept timeout so the main loop can check for KeyboardInterrupt
-    # (allows graceful shutdown instead of blocking forever on accept())
-    server.settimeout(1.0)
+    server.settimeout(1.0)  # timeout to allow keyboard interrupt checks
+
+    print(f"Server listening on {host}:{port}")
+
     try:
         while True:
             try:
                 client_socket, client_address = server.accept()
-                
-            # no incoming connection yet, keep waiting
             except socket.timeout:
                 continue
 
@@ -50,13 +89,16 @@ def main():
                 args=(client_socket, client_address),
                 daemon=True
             )
+
             thread.start()
 
     except KeyboardInterrupt:
+        # shutdown on Ctrl+C
         print("\nServer stopped")
 
     finally:
         server.close()
-    
+
+
 if __name__ == "__main__":
     main()

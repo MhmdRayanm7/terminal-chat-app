@@ -1,5 +1,23 @@
-import socket
-import threading
+import socket  
+import threading  
+
+
+def receive_messages(client_socket):
+
+    while True:
+        try:
+            message = client_socket.recv(1024).decode("utf-8")
+
+            if not message:
+                print("\nDisconnected from server")
+                break
+
+            print(f"\n{message}")
+            print("> ", end="", flush=True)
+
+        except OSError:
+            # socket error or closed, stop receiving
+            break
 
 
 def main():
@@ -13,29 +31,38 @@ def main():
     #client try to connect to server
     client_socket.connect((HOST, PORT))
     print("You have connected Successfully")
-    
 
-    
-    while True:
-        message = input("> ")
+    # start a background thread to receive messages
+    receive_thread = threading.Thread(
+        target=receive_messages,
+        args=(client_socket,),
+        daemon=True,
+    )
 
-        #to quit
-        if message.strip().lower() == "/quit":
-            break
-        
-        #if press enter
-        if not message.strip():
-            continue
-        
-        client_socket.sendall(message.encode("utf-8"))
+    receive_thread.start()
 
-        #          wait until get data    |  bytes → string
-        server_message = client_socket.recv(1024).decode("utf-8")
-        print(f"Received: {server_message }")
-        
+    try:
+        while True:
+            message = input("> ").strip()
 
-    
-    client_socket.close()
+             #to quit
+            if message.lower().strip() == "/quit":
+                break
+
+            # ignore empty messages
+            if not message:
+                continue
+
+            #         wait until get data |  bytes → string
+            client_socket.sendall(message.encode("utf-8"))
+
+    except KeyboardInterrupt:
+        # handle Ctrl+C gracefully
+        pass
+
+    finally:
+        client_socket.close()
+
 
 if __name__ == "__main__":
     main()
