@@ -10,12 +10,16 @@ def main():
     HOST = "127.0.0.1"
     PORT = 5050
 
+    #Reserve the address and port for the server.
     server.bind((HOST, PORT))
     server.listen()
 
     client_socket, client_address = server.accept()
     print(f"Connected: {client_address}")
-
+    #          wait until get data    |  bytes → string
+    message = client_socket.recv(1024).decode("utf-8")
+    print(message)
+    
     client_socket.close()
     server.close()
     

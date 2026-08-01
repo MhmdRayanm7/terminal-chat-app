@@ -10,8 +10,16 @@ def main():
     HOST = "127.0.0.1"
     PORT = 5050
     
+    #client try to connect to server
     client_socket.connect((HOST, PORT))
     print("You have connected Successfully")
+
+
+    
+    message ="Hello from client"
+    client_socket.sendall(message.encode("utf-8"))
+    
+    
     client_socket.close()
 
 if __name__ == "__main__":
