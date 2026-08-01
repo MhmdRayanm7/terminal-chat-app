@@ -32,6 +32,15 @@ def main():
     client_socket.connect((HOST, PORT))
     print("You have connected Successfully")
 
+    # Ask once, then send the username before any normal chat message.
+    username = input("Username: ").strip()
+
+    while not username:
+        print("Username cannot be empty.")
+        username = input("Username: ").strip()
+
+    client_socket.sendall(username.encode("utf-8"))
+
     # start a background thread to receive messages
     receive_thread = threading.Thread(
         target=receive_messages,

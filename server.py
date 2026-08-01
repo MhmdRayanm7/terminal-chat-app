@@ -3,7 +3,8 @@ import threading
 
 
 clients = []  # list to keep track of connected client sockets
-clients_lock = threading.Lock()  # lock to protect access to clients list
+usernames = {}  # map each client socket to its username
+clients_lock = threading.Lock()  # lock to protect shared client data
 
 
 def broadcast(message):
@@ -21,10 +22,12 @@ def broadcast(message):
 
 
 def remove_client(client_socket):
-    # remove the client from the list safely
+    # remove the client and username safely
     with clients_lock:
         if client_socket in clients:
             clients.remove(client_socket)
+        if client_socket in usernames:
+            del usernames[client_socket]
 
     # close the socket to release resources
     client_socket.close()
@@ -32,12 +35,21 @@ def remove_client(client_socket):
 
 def handle_client(client_socket, client_address):
     print(f"Connected: {client_address}")
-
-    # add client to the shared list
-    with clients_lock:
-        clients.append(client_socket)
+    username = None
 
     try:
+        # The first data received from a client is always its username.
+        username = client_socket.recv(1024).decode("utf-8").strip()
+
+        if not username:
+            return
+
+        with clients_lock:
+            clients.append(client_socket)
+            usernames[client_socket] = username
+
+        broadcast(f"- {username} joined the chat *")
+
         while True:
         #          wait until get data    |  bytes → string
             message = client_socket.recv(1024).decode("utf-8")
@@ -45,8 +57,9 @@ def handle_client(client_socket, client_address):
             if not message:
                 break
 
-            print(f"Received from {client_address}: {message}")
-            broadcast(message)
+            formatted_message = f"{username}: {message}"
+            print(f"Received from {client_address}: {formatted_message}")
+            broadcast(formatted_message)
 
     except OSError:
         # ignore socket errors during receive
@@ -54,6 +67,11 @@ def handle_client(client_socket, client_address):
 
     finally:
         print(f"Disconnected: {client_address}")
+
+        # Use the local username before removing it from the dictionary.
+        if username:
+            broadcast(f"- {username} left the chat *")
+
         remove_client(client_socket)
 
 
