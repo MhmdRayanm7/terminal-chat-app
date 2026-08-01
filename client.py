@@ -18,9 +18,15 @@ def main():
     
     while True:
         message = input("> ")
-    
+
+        #to quit
         if message.strip().lower() == "/quit":
             break
+        
+        #if press enter
+        if not message.strip():
+            continue
+        
         client_socket.sendall(message.encode("utf-8"))
 
         #          wait until get data    |  bytes → string
