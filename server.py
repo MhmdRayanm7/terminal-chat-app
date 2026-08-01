@@ -26,6 +26,9 @@ def main():
             break
 
         print(f"Received: {message}")
+        
+        server_message = f"Server received: {message}"
+        client_socket.sendall(server_message.encode("utf-8"))
 
    
 

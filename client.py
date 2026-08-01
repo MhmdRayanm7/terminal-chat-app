@@ -23,6 +23,9 @@ def main():
             break
         client_socket.sendall(message.encode("utf-8"))
 
+        #          wait until get data    |  bytes → string
+        server_message = client_socket.recv(1024).decode("utf-8")
+        print(f"Received: {server_message }")
         
 
     
