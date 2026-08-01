@@ -16,9 +16,19 @@ def main():
 
     client_socket, client_address = server.accept()
     print(f"Connected: {client_address}")
-    #          wait until get data    |  bytes → string
-    message = client_socket.recv(1024).decode("utf-8")
-    print(message)
+    
+    while True:
+        #          wait until get data    |  bytes → string
+        message = client_socket.recv(1024).decode("utf-8")
+
+        if not message:
+            print("Client disconnected")
+            break
+
+        print(f"Received: {message}")
+
+   
+
     
     client_socket.close()
     server.close()

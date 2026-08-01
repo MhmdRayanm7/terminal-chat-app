@@ -13,12 +13,18 @@ def main():
     #client try to connect to server
     client_socket.connect((HOST, PORT))
     print("You have connected Successfully")
-
+    
 
     
-    message ="Hello from client"
-    client_socket.sendall(message.encode("utf-8"))
+    while True:
+        message = input("> ")
     
+        if message.strip().lower() == "/quit":
+            break
+        client_socket.sendall(message.encode("utf-8"))
+
+        
+
     
     client_socket.close()
 
