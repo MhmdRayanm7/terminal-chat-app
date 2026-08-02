@@ -54,8 +54,9 @@ def main():
         while True:
             message = input("> ").strip()
 
-             #to quit
+            #to quit
             if message.lower().strip() == "/quit":
+                client_socket.sendall(message.encode("utf-8"))
                 break
 
             # ignore empty messages

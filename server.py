@@ -57,6 +57,19 @@ def handle_client(client_socket, client_address):
             if not message:
                 break
 
+            command = message.strip().lower()
+
+            if command.startswith("/users"):
+                with clients_lock:
+                    online_users = list(usernames.values())
+
+                users_message = f"Online users: {', '.join(online_users)}"
+                client_socket.sendall(users_message.encode("utf-8"))
+                continue
+
+            if command.startswith("/quit"):
+                break
+
             formatted_message = f"{username}: {message}"
             print(f"Received from {client_address}: {formatted_message}")
             broadcast(formatted_message)
@@ -68,11 +81,11 @@ def handle_client(client_socket, client_address):
     finally:
         print(f"Disconnected: {client_address}")
 
-        # Use the local username before removing it from the dictionary.
+        # Remove this user before notifying the remaining clients.
+        remove_client(client_socket)
+
         if username:
             broadcast(f"- {username} left the chat *")
-
-        remove_client(client_socket)
 
 
 def main():
