@@ -15,7 +15,8 @@ def broadcast(message):
     # send the message to each client
     for connected_client in connected_clients:
         try:
-            connected_client.sendall(message.encode("utf-8"))
+            # add new line so client know where message end
+            connected_client.sendall(f"{message}\n".encode("utf-8"))
         except OSError:
             # if sending fails, remove the client
             remove_client(connected_client)
@@ -36,43 +37,58 @@ def remove_client(client_socket):
 def handle_client(client_socket, client_address):
     print(f"Connected: {client_address}")
     username = None
+    # keep incomplete data until new line arrive
+    buffer = ""
 
     try:
-        # The first data received from a client is always its username.
-        username = client_socket.recv(1024).decode("utf-8").strip()
-
-        if not username:
-            return
-
-        with clients_lock:
-            clients.append(client_socket)
-            usernames[client_socket] = username
-
-        broadcast(f"- {username} joined the chat *")
-
         while True:
-        #          wait until get data    |  bytes → string
-            message = client_socket.recv(1024).decode("utf-8")
+            # wait until get data from client
+            received_data = client_socket.recv(1024)
 
-            if not message:
+            if not received_data:
                 break
 
-            command = message.strip().lower()
+            # add new data to old incomplete data
+            buffer += received_data.decode("utf-8")
 
-            if command.startswith("/users"):
-                with clients_lock:
-                    online_users = list(usernames.values())
+            # process only complete messages
+            while "\n" in buffer:
+                # get one message and keep the rest in buffer
+                message, buffer = buffer.split("\n", 1)
 
-                users_message = f"Online users: {', '.join(online_users)}"
-                client_socket.sendall(users_message.encode("utf-8"))
-                continue
+                # first complete message is the username
+                if username is None:
+                    username = message.strip()
 
-            if command.startswith("/quit"):
-                break
+                    if not username:
+                        return
 
-            formatted_message = f"{username}: {message}"
-            print(f"Received from {client_address}: {formatted_message}")
-            broadcast(formatted_message)
+                    with clients_lock:
+                        clients.append(client_socket)
+                        usernames[client_socket] = username
+
+                    broadcast(f"- {username} joined the chat *")
+                    continue
+
+                command = message.strip().lower()
+
+                # send online usernames only to this client
+                if command.startswith("/users"):
+                    with clients_lock:
+                        online_users = list(usernames.values())
+
+                    users_message = f"Online users: {', '.join(online_users)}"
+                    # add new line so client can read complete message
+                    client_socket.sendall(f"{users_message}\n".encode("utf-8"))
+                    continue
+
+                # stop this client when user quit
+                if command.startswith("/quit"):
+                    return
+
+                formatted_message = f"{username}: {message}"
+                print(f"Received from {client_address}: {formatted_message}")
+                broadcast(formatted_message)
 
     except OSError:
         # ignore socket errors during receive
@@ -81,7 +97,7 @@ def handle_client(client_socket, client_address):
     finally:
         print(f"Disconnected: {client_address}")
 
-        # Remove this user before notifying the remaining clients.
+        # remove this user before tell the other clients
         remove_client(client_socket)
 
         if username:
