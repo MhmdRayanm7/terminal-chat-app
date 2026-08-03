@@ -6,6 +6,10 @@ A terminal-based chat application made with Python sockets and threads. One serv
 
 The server listens on `127.0.0.1:5050`, so the chat is available on the same computer by default.
 
+## Demo
+
+[![Watch the Terminal Chat App demo](demo/preview.png)](demo/TCA.mp4)
+
 ## Features
 
 - Multiple clients can chat at the same time.
@@ -29,7 +33,7 @@ The server listens on `127.0.0.1:5050`, so the chat is available on the same com
 Clone the project and enter its folder:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/MhmdRayanm7/terminal-chat-app.git
 cd terminal-chat-app
 ```
 
@@ -39,36 +43,54 @@ Create a virtual environment:
 python -m venv .venv
 ```
 
-Activate it on Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Or activate it in Git Bash:
-
-```bash
-source .venv/Scripts/activate
-```
-
-Install the only external dependency:
-
-```bash
-python -m pip install -r requirements.txt
-```
+The activation and installation commands for Git Bash and PowerShell are shown below. The environment must be activated again in every new terminal.
 
 ## How to Run
 
-Open one terminal and start the server:
+The server and clients use `127.0.0.1:5050`, so they must run on the same computer.
+
+### Git Bash
+
+In the first terminal, clone the project, create the environment, install the dependency, and start the server:
 
 ```bash
+git clone https://github.com/MhmdRayanm7/terminal-chat-app.git
+cd terminal-chat-app
+python -m venv .venv
+source .venv/Scripts/activate
+python -m pip install -r requirements.txt
 python server.py
 ```
 
-Keep the server running. Open a new terminal for each client and run:
+Keep the server running. Open a second terminal for a client:
 
 ```bash
+cd terminal-chat-app
+source .venv/Scripts/activate
 python client.py
+```
+
+Open a third terminal and repeat the same client commands. Activate the virtual environment in every new terminal before running `client.py`.
+
+### Windows PowerShell
+
+In the first terminal, clone the project, create the environment, install the dependency, and start the server:
+
+```powershell
+git clone https://github.com/MhmdRayanm7/terminal-chat-app.git
+cd terminal-chat-app
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -m pip install -r requirements.txt
+py server.py
+```
+
+Keep the server running. In every new client terminal, activate the same environment before starting the client:
+
+```powershell
+cd terminal-chat-app
+.\.venv\Scripts\Activate.ps1
+py client.py
 ```
 
 Enter a unique username, then start sending messages. Press `Ctrl+C` or use `/quit` to close a client. Press `Ctrl+C` in the server terminal to stop the server.
@@ -84,6 +106,9 @@ Empty messages are ignored and are not sent to the server.
 
 ```text
 terminal-chat-app/
+|-- demo/
+|   |-- TCA.mp4         # short chat demonstration
+|   `-- preview.png     # clickable video preview
 |-- client.py           # connects user and displays terminal chat UI
 |-- server.py           # accepts clients and broadcasts chat data
 |-- terminal_colors.py  # shared ANSI colors and color helper
