@@ -1,10 +1,21 @@
 import socket  
 import threading  
+from datetime import datetime
+
+from terminal_colors import BLUE, CYAN, GRAY, GREEN, YELLOW, color_text
 
 
 clients = []  # list to keep track of connected client sockets
 usernames = {}  # map each client socket to its username
 clients_lock = threading.Lock()  # lock to protect shared client data
+display_lock = threading.Lock()  # lock to stop threads from printing together
+
+
+def display_message(message, color):
+    # only one thread can display message at same time
+    current_time = datetime.now().strftime("%H:%M")
+    with display_lock:
+        print(f"{color_text(f'[{current_time}]', GRAY)} {color_text(message, color)}")
 
 
 def broadcast(message):
@@ -48,7 +59,7 @@ def remove_client(client_socket):
 
 
 def handle_client(client_socket, client_address):
-    print(f"Connected: {client_address}")
+    display_message(f"Connected: {client_address}", GREEN)
     username = None
     # keep incomplete data until new line arrive
     buffer = ""
@@ -112,7 +123,10 @@ def handle_client(client_socket, client_address):
                     return
 
                 formatted_message = f"{username}: {message}"
-                print(f"Received from {client_address}: {formatted_message}")
+                display_message(
+                    f"Received from {client_address}: {formatted_message}",
+                    BLUE
+                )
                 broadcast(formatted_message)
 
     except OSError:
@@ -120,7 +134,7 @@ def handle_client(client_socket, client_address):
         pass
 
     finally:
-        print(f"Disconnected: {client_address}")
+        display_message(f"Disconnected: {client_address}", CYAN)
 
         # remove this user before tell the other clients
         removed_username = remove_client(client_socket)
@@ -147,7 +161,7 @@ def main():
     server.listen()
     server.settimeout(1.0)  # timeout to allow keyboard interrupt checks
 
-    print(f"Server listening on {host}:{port}")
+    display_message(f"Server listening on {host}:{port}", GREEN)
 
     try:
         while True:
@@ -166,7 +180,7 @@ def main():
 
     except KeyboardInterrupt:
         # shutdown on Ctrl+C
-        print("\nServer stopped")
+        display_message("Server stopped", YELLOW)
 
     finally:
         with clients_lock:
