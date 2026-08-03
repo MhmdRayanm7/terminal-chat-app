@@ -106,9 +106,6 @@ Empty messages are ignored and are not sent to the server.
 
 ```text
 terminal-chat-app/
-|-- demo/
-|   |-- TCA.mp4         # short chat demonstration
-|   `-- preview.png     # clickable video preview
 |-- client.py           # connects user and displays terminal chat UI
 |-- server.py           # accepts clients and broadcasts chat data
 |-- terminal_colors.py  # shared ANSI colors and color helper
