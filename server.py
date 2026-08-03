@@ -19,19 +19,32 @@ def broadcast(message):
             connected_client.sendall(f"{message}\n".encode("utf-8"))
         except OSError:
             # if sending fails, remove the client
-            remove_client(connected_client)
+            removed_username = remove_client(connected_client)
+            if removed_username:
+                broadcast(f"- {removed_username} left the chat *")
 
 
 def remove_client(client_socket):
     # remove the client and username safely
+    removed_username = None
     with clients_lock:
         if client_socket in clients:
             clients.remove(client_socket)
         if client_socket in usernames:
+            removed_username = usernames[client_socket]
             del usernames[client_socket]
 
     # close the socket to release resources
-    client_socket.close()
+    try:
+        client_socket.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        client_socket.close()
+    except OSError:
+        pass
+
+    return removed_username
 
 
 def handle_client(client_socket, client_address):
@@ -60,12 +73,24 @@ def handle_client(client_socket, client_address):
                 if username is None:
                     username = message.strip()
 
-                    if not username:
-                        return
-
                     with clients_lock:
-                        clients.append(client_socket)
-                        usernames[client_socket] = username
+                        username_is_used = username in usernames.values()
+
+                        if not username or username_is_used:
+                            username_error = (
+                                "Username cannot be empty."
+                                if not username
+                                else "Username is already used."
+                            )
+                        else:
+                            clients.append(client_socket)
+                            usernames[client_socket] = username
+
+                    if not username or username_is_used:
+                        client_socket.sendall(
+                            f"{username_error}\n".encode("utf-8")
+                        )
+                        return
 
                     broadcast(f"- {username} joined the chat *")
                     continue
@@ -98,10 +123,10 @@ def handle_client(client_socket, client_address):
         print(f"Disconnected: {client_address}")
 
         # remove this user before tell the other clients
-        remove_client(client_socket)
+        removed_username = remove_client(client_socket)
 
-        if username:
-            broadcast(f"- {username} left the chat *")
+        if removed_username:
+            broadcast(f"- {removed_username} left the chat *")
 
 
 def main():
@@ -144,6 +169,12 @@ def main():
         print("\nServer stopped")
 
     finally:
+        with clients_lock:
+            connected_clients = clients.copy()
+
+        for client_socket in connected_clients:
+            remove_client(client_socket)
+
         server.close()
 
 

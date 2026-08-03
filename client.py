@@ -39,7 +39,17 @@ def main():
     PORT = 5050
     
     #client try to connect to server
-    client_socket.connect((HOST, PORT))
+    try:
+        client_socket.connect((HOST, PORT))
+    except ConnectionRefusedError:
+        print("Could not connect. Is the server running?")
+        client_socket.close()
+        return
+    except OSError as error:
+        print(f"Socket error: {error}")
+        client_socket.close()
+        return
+
     print("You have connected Successfully")
 
     # ask once then send username before normal messages
@@ -81,8 +91,14 @@ def main():
     except KeyboardInterrupt:
         # handle Ctrl+C gracefully
         pass
+    except OSError as error:
+        print(f"Socket error: {error}")
 
     finally:
+        try:
+            client_socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         client_socket.close()
 
 
