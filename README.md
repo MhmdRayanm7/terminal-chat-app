@@ -8,7 +8,7 @@ The server listens on `127.0.0.1:5050`, so the chat is available on the same com
 
 ## Demo
 
-[![Watch the Terminal Chat App demo](demo/preview.png)](demo/TCA.mp4)
+https://github.com/user-attachments/assets/48c52d5b-a399-47a1-bba0-a4eb0a9f15b8
 
 ## Features
 
