@@ -28,9 +28,33 @@ def display_message(message):
         print_formatted_text(ANSI(f"\n{message}"))
 
 
-def receive_messages(client_socket):
+def close_socket(client_socket):
+    # shutdown and close socket safely
+    try:
+        client_socket.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        client_socket.close()
+    except OSError:
+        pass
+
+
+def receive_line(client_socket):
+    # receive first complete line and keep extra data
+    buffer = b""
+    while b"\n" not in buffer:
+        received_data = client_socket.recv(1024)
+        if not received_data:
+            return None, buffer
+        buffer += received_data
+
+    message, buffer = buffer.split(b"\n", 1)
+    return message.decode("utf-8"), buffer
+
+
+def receive_messages(client_socket, buffer=b""):
     # keep incomplete data until new line arrive
-    buffer = ""
 
     while True:
         try:
@@ -42,12 +66,13 @@ def receive_messages(client_socket):
                 break
 
             # add new data to old incomplete data
-            buffer += received_data.decode("utf-8")
+            buffer += received_data
 
             # print only complete messages
-            while "\n" in buffer:
+            while b"\n" in buffer:
                 # get one message and keep the rest in buffer
-                message, buffer = buffer.split("\n", 1)
+                message, buffer = buffer.split(b"\n", 1)
+                message = message.decode("utf-8")
 
                 # system messages start with - and command result starts with Online users
                 if message.startswith("- "):
@@ -62,7 +87,7 @@ def receive_messages(client_socket):
 
                 display_message(formatted_message)
 
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             # socket error or closed, stop receiving
             break
 
@@ -104,30 +129,47 @@ def main():
         client_socket.connect((HOST, PORT))
     except ConnectionRefusedError:
         print(color_text("Could not connect. Is the server running?", RED))
-        client_socket.close()
+        close_socket(client_socket)
         return
     except OSError as error:
         print(color_text(f"Socket error: {error}", RED))
-        client_socket.close()
+        close_socket(client_socket)
         return
 
     print(color_text("You have connected Successfully", GREEN))
     print(color_text("─" * 40, GRAY))
 
     # ask once then send username before normal messages
-    username = input("Username: ").strip()
-
-    while not username:
-        print("Username cannot be empty.")
+    try:
         username = input("Username: ").strip()
 
-    # add new line to end of username
-    client_socket.sendall(f"{username}\n".encode("utf-8"))
+        while not username:
+            print("Username cannot be empty.")
+            username = input("Username: ").strip()
+
+        # add new line to end of username
+        client_socket.sendall(f"{username}\n".encode("utf-8"))
+
+        # wait until server accept or reject username
+        username_response, buffer = receive_line(client_socket)
+    except (KeyboardInterrupt, EOFError):
+        close_socket(client_socket)
+        return
+    except (OSError, UnicodeDecodeError) as error:
+        display_message(color_text(f"Socket error: {error}", RED))
+        close_socket(client_socket)
+        return
+
+    if username_response != "USERNAME_ACCEPTED":
+        error_message = username_response or "Server disconnected."
+        display_message(color_text(error_message, RED))
+        close_socket(client_socket)
+        return
 
     # start a background thread to receive messages
     receive_thread = threading.Thread(
         target=receive_messages,
-        args=(client_socket,),
+        args=(client_socket, buffer),
         daemon=True,
     )
 
@@ -144,11 +186,7 @@ def main():
 
     finally:
         display_message(color_text("─" * 40, GRAY))
-        try:
-            client_socket.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        client_socket.close()
+        close_socket(client_socket)
 
 
 if __name__ == "__main__":

@@ -2,20 +2,24 @@ import socket
 import threading  
 from datetime import datetime
 
-from terminal_colors import BLUE, CYAN, GRAY, GREEN, YELLOW, color_text
+from terminal_colors import BLUE, CYAN, GRAY, GREEN, RED, YELLOW, color_text
 
 
 clients = []  # list to keep track of connected client sockets
 usernames = {}  # map each client socket to its username
 clients_lock = threading.Lock()  # lock to protect shared client data
 display_lock = threading.Lock()  # lock to stop threads from printing together
+broadcast_lock = threading.Lock()  # lock to stop messages from mixing together
 
 
 def display_message(message, color):
     # only one thread can display message at same time
     current_time = datetime.now().strftime("%H:%M")
     with display_lock:
-        print(f"{color_text(f'[{current_time}]', GRAY)} {color_text(message, color)}")
+        formatted_message = (
+            f"{color_text(f'[{current_time}]', GRAY)} {color_text(message, color)}"
+        )
+        print(formatted_message)
 
 
 def broadcast(message):
@@ -23,16 +27,33 @@ def broadcast(message):
     with clients_lock:
         connected_clients = clients.copy()
 
+    disconnected_usernames = []
     # send the message to each client
-    for connected_client in connected_clients:
-        try:
-            # add new line so client know where message end
-            connected_client.sendall(f"{message}\n".encode("utf-8"))
-        except OSError:
-            # if sending fails, remove the client
-            removed_username = remove_client(connected_client)
-            if removed_username:
-                broadcast(f"- {removed_username} left the chat *")
+    with broadcast_lock:
+        for connected_client in connected_clients:
+            try:
+                # add new line so client know where message end
+                connected_client.sendall(f"{message}\n".encode("utf-8"))
+            except OSError:
+                # if sending fails, remove the client
+                removed_username = remove_client(connected_client)
+                if removed_username:
+                    disconnected_usernames.append(removed_username)
+
+    for removed_username in disconnected_usernames:
+        broadcast(f"- {removed_username} left the chat *")
+
+
+def close_socket(socket_to_close):
+    # shutdown and close socket safely
+    try:
+        socket_to_close.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        socket_to_close.close()
+    except OSError:
+        pass
 
 
 def remove_client(client_socket):
@@ -46,14 +67,7 @@ def remove_client(client_socket):
             del usernames[client_socket]
 
     # close the socket to release resources
-    try:
-        client_socket.shutdown(socket.SHUT_RDWR)
-    except OSError:
-        pass
-    try:
-        client_socket.close()
-    except OSError:
-        pass
+    close_socket(client_socket)
 
     return removed_username
 
@@ -62,7 +76,7 @@ def handle_client(client_socket, client_address):
     display_message(f"Connected: {client_address}", GREEN)
     username = None
     # keep incomplete data until new line arrive
-    buffer = ""
+    buffer = b""
 
     try:
         while True:
@@ -73,19 +87,23 @@ def handle_client(client_socket, client_address):
                 break
 
             # add new data to old incomplete data
-            buffer += received_data.decode("utf-8")
+            buffer += received_data
 
             # process only complete messages
-            while "\n" in buffer:
+            while b"\n" in buffer:
                 # get one message and keep the rest in buffer
-                message, buffer = buffer.split("\n", 1)
+                message, buffer = buffer.split(b"\n", 1)
+                message = message.decode("utf-8")
 
                 # first complete message is the username
                 if username is None:
                     username = message.strip()
 
                     with clients_lock:
-                        username_is_used = username in usernames.values()
+                        username_is_used = username.casefold() in {
+                            saved_username.casefold()
+                            for saved_username in usernames.values()
+                        }
 
                         if not username or username_is_used:
                             username_error = (
@@ -103,13 +121,18 @@ def handle_client(client_socket, client_address):
                         )
                         return
 
+                    client_socket.sendall(b"USERNAME_ACCEPTED\n")
                     broadcast(f"- {username} joined the chat *")
                     continue
 
                 command = message.strip().lower()
 
+                # ignore empty messages
+                if not message.strip():
+                    continue
+
                 # send online usernames only to this client
-                if command.startswith("/users"):
+                if command == "/users":
                     with clients_lock:
                         online_users = list(usernames.values())
 
@@ -119,7 +142,7 @@ def handle_client(client_socket, client_address):
                     continue
 
                 # stop this client when user quit
-                if command.startswith("/quit"):
+                if command == "/quit":
                     return
 
                 formatted_message = f"{username}: {message}"
@@ -129,7 +152,7 @@ def handle_client(client_socket, client_address):
                 )
                 broadcast(formatted_message)
 
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         # ignore socket errors during receive
         pass
 
@@ -150,16 +173,29 @@ def main():
     # create a TCP socket
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Allow Fast Restart
-    server.setsockopt(
-        socket.SOL_SOCKET,
-        socket.SO_REUSEADDR,
-        1
-    )
+    # stop two servers from using same port on Windows
+    if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+        server.setsockopt(
+            socket.SOL_SOCKET,
+            socket.SO_EXCLUSIVEADDRUSE,
+            1
+        )
+    else:
+        # Allow Fast Restart
+        server.setsockopt(
+            socket.SOL_SOCKET,
+            socket.SO_REUSEADDR,
+            1
+        )
 
-    server.bind((host, port))
-    server.listen()
-    server.settimeout(1.0)  # timeout to allow keyboard interrupt checks
+    try:
+        server.bind((host, port))
+        server.listen()
+        server.settimeout(1.0)  # timeout to allow keyboard interrupt checks
+    except OSError as error:
+        display_message(f"Could not start server: {error}", RED)
+        close_socket(server)
+        return
 
     display_message(f"Server listening on {host}:{port}", GREEN)
 
@@ -189,7 +225,7 @@ def main():
         for client_socket in connected_clients:
             remove_client(client_socket)
 
-        server.close()
+        close_socket(server)
 
 
 if __name__ == "__main__":
